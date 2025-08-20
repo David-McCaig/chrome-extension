@@ -65,3 +65,4 @@ Your React app should now be loaded as a Chrome extension!
 
 This project is licensed under the MIT License.# chrome-extension
 # chrome-extension
+# chrome-extension
