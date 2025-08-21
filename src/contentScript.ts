@@ -382,7 +382,7 @@ function init() {
     }, 500);
     
     // Listen for dynamic content changes with immediate duplicate removal and debounced re-adding
-    let debounceTimer: number;
+    let debounceTimer: ReturnType<typeof setTimeout>;
     const observer = new MutationObserver(() => {
       // Immediately check for and remove duplicate buttons (no delay)
       const currentButtons = document.querySelectorAll('[data-custom-button]');
