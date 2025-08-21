@@ -10,6 +10,10 @@ export default defineConfig({
         {
           src: 'public/manifest.json',
           dest: '.',
+        },
+        {
+          src: 'src/contentScript.ts',
+          dest: '.',
         }
       ],
     }),
@@ -19,6 +23,10 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: './index.html',
+        contentScript: './src/contentScript.ts',
+      },
+      output: {
+        entryFileNames: '[name].js',
       },
     },
   },
