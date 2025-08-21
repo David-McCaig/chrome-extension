@@ -1,6 +1,6 @@
 # Lightspeed Workorder Helper Chrome Extension
 
-A Chrome extension that enhances the Lightspeed Retail (R-Series) workorder interface by adding custom functionality and buttons.
+A Chrome extension that enhances the Lightspeed Retail (R-Series) workorder interface by adding custom functionality and buttons. Built with React, TypeScript, Tailwind CSS, and shadcn/ui for a modern development experience.
 
 ## Features
 
@@ -110,19 +110,54 @@ customButton.style.cssText = `
 `;
 ```
 
+### Styling with Tailwind CSS and shadcn/ui
+
+The extension now uses Tailwind CSS and shadcn/ui for styling. You can:
+
+1. **Modify the popup styles** in `src/App.tsx` using Tailwind utility classes and shadcn/ui components
+2. **Customize the design system** in `tailwind.config.js`
+3. **Add custom components** using `@layer components` in `src/index.css`
+4. **Add more shadcn/ui components** using `npx shadcn@latest add [component-name]`
+
+Example of adding custom styles:
+```css
+@layer components {
+  .custom-button {
+    @apply bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded;
+  }
+}
+```
+
+Example of using shadcn/ui components:
+```tsx
+import { Button } from '@/components/ui/button'
+
+<Button variant="outline" size="sm">
+  Click me
+</Button>
+```
+
 ## Development
 
 ### Project Structure
 
 ```
 ├── src/
-│   ├── App.tsx              # Main popup component
-│   ├── App.css              # Popup styles
+│   ├── App.tsx              # Main popup component (uses Tailwind CSS + shadcn/ui)
 │   ├── contentScript.ts     # Content script for page injection
-│   └── main.tsx             # Entry point
+│   ├── main.tsx             # Entry point
+│   ├── index.css            # Global styles with Tailwind directives
+│   ├── components/
+│   │   └── ui/
+│   │       └── button.tsx   # shadcn/ui Button component
+│   └── lib/
+│       └── utils.ts         # Utility functions for shadcn/ui
 ├── public/
 │   └── manifest.json        # Extension manifest
 ├── build/                   # Built extension files
+├── components.json          # shadcn/ui configuration
+├── tailwind.config.js       # Tailwind CSS configuration
+├── postcss.config.js        # PostCSS configuration
 └── vite.config.ts          # Build configuration
 ```
 
@@ -131,6 +166,15 @@ customButton.style.cssText = `
 - `npm run dev` - Start development server
 - `npm run build` - Build extension for production
 - `npm run preview` - Preview built extension
+
+### shadcn/ui Components
+
+The project uses shadcn/ui for consistent, accessible UI components:
+
+- **Add new components**: `npx shadcn@latest add [component-name]`
+- **Available components**: button, card, dialog, input, etc.
+- **Configuration**: See `components.json` for settings
+- **Styling**: Components use Tailwind CSS with CSS variables for theming
 
 ### Building for Production
 
