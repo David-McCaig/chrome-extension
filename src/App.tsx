@@ -63,7 +63,7 @@ function App() {
         </ol>
       </div>
 
-      <div className="text-center mt-5">
+      <div className="text-center mt-5 space-y-3">
         <Button 
           onClick={checkIfOnWorkorderPage}
           variant="outline"

@@ -1,3 +1,5 @@
+
+
 // Content script for Lightspeed Retail workorders
 console.log('Lightspeed Workorder Helper: Content script loaded - Version 2.0');
 
@@ -253,97 +255,551 @@ function createCustomButton(): HTMLElement {
     console.log('Workorder ID:', workorderId);
     
     // ===== CUSTOM LOGIC AREA =====
-    // Add your specific functionality here:
+    // Extract customer data from the page
+    const customerData = extractCustomerData();
     
-    // Example 1: Remove specific elements
-    removeSpecificElements();
+    // Store customer data for the extension popup to access
+    localStorage.setItem('extractedCustomerData', JSON.stringify(customerData));
     
-    // Example 2: Add new functionality
-    addCustomFunctionality();
-    
-    // Example 3: Extract data from the page
-    extractWorkorderData();
-    
-    // Show success message
-    alert(`Custom action completed for workorder ID: ${workorderId}`);
+    // Go directly to text customer modal
+    // Clean phone number to remove any formatting
+    const cleanPhoneNumber = (customerData.mobile || '').replace(/\D/g, '');
+    showTextCustomerModal(cleanPhoneNumber);
   });
 
   return customButton;
 }
 
-// Example function: Remove specific elements
-function removeSpecificElements() {
-  // Add the CSS selectors of elements you want to remove
-  const elementsToRemove: string[] = [
-    // '.unwanted-sidebar',
-    // '.annoying-popup',
-    // '.unnecessary-button',
-    // '#some-id-to-remove'
+// Note: Removed intermediate modal functions to go directly to text customer modal
+
+// Function to extract customer data from the page
+function extractCustomerData() {
+  const customerData: any = {
+    workorderId: new URLSearchParams(window.location.search).get('id'),
+    name: '',
+    mobile: '',
+    email: '',
+    address: ''
+  };
+
+  // Try to extract customer name from various possible selectors
+  const nameSelectors = [
+    '.customer-name',
+    '.client-name',
+    '.customer-info .name',
+    '.workorder-customer',
+    '[data-field="customer_name"]',
+    '.form-field[data-field="customer_name"] input',
+    'input[name*="customer"][name*="name"]',
+    'input[name*="client"][name*="name"]',
+    '.customer-details .name',
+    '.workorder-details .customer-name'
   ];
 
-  elementsToRemove.forEach(selector => {
-    const elements = document.querySelectorAll(selector);
-    elements.forEach(element => {
-      element.remove();
-      console.log(`Removed element: ${selector}`);
-    });
-  });
+  for (const selector of nameSelectors) {
+    const element = document.querySelector(selector);
+    if (element) {
+      const value = (element as HTMLInputElement).value || element.textContent?.trim();
+      if (value) {
+        customerData.name = value;
+        break;
+      }
+    }
+  }
+
+  // First, try to find mobile number specifically by looking for "Mobile" label
+  let mobileFound = false;
+  
+  // Look for span elements with class "label" that contain "Mobile" text
+  const mobileLabelSpans = document.querySelectorAll('span.label');
+  for (const span of mobileLabelSpans) {
+    if (span.textContent?.trim().toLowerCase() === 'mobile') {
+      // Found the mobile label, now look for the phone number
+      // It could be in the same li element, or a sibling, or child
+      const parentLi = span.closest('li');
+      if (parentLi) {
+        // Get all text content from the li element
+        const liText = parentLi.textContent || '';
+        // Extract phone number from the text
+        const phoneRegex = /(\+?1?[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})/g;
+        const phoneMatches = liText.match(phoneRegex);
+        if (phoneMatches && phoneMatches.length > 0) {
+          customerData.mobile = phoneMatches[0];
+          mobileFound = true;
+          break;
+        }
+      }
+      
+      // If not found in parent li, try looking at siblings
+      const parent = span.parentElement;
+      if (parent) {
+        const siblings = Array.from(parent.children);
+        for (const sibling of siblings) {
+          if (sibling !== span) {
+            const siblingText = sibling.textContent || '';
+            const phoneRegex = /(\+?1?[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})/g;
+            const phoneMatches = siblingText.match(phoneRegex);
+            if (phoneMatches && phoneMatches.length > 0) {
+              customerData.mobile = phoneMatches[0];
+              mobileFound = true;
+              break;
+            }
+          }
+        }
+      }
+      
+      if (mobileFound) break;
+    }
+  }
+
+  // If mobile not found, try other selectors as fallback
+  if (!mobileFound) {
+    const mobileSelectors = [
+      '.customer-phone',
+      '.customer-mobile',
+      '.client-phone',
+      '.client-mobile',
+      '.customer-info .phone',
+      '.customer-info .mobile',
+      '[data-field="customer_phone"]',
+      '[data-field="customer_mobile"]',
+      '.form-field[data-field="customer_phone"] input',
+      '.form-field[data-field="customer_mobile"] input',
+      'input[name*="phone"]',
+      'input[name*="mobile"]',
+      'input[type="tel"]',
+      '.customer-details .phone',
+      '.customer-details .mobile'
+    ];
+
+    for (const selector of mobileSelectors) {
+      const element = document.querySelector(selector);
+      if (element) {
+        const value = (element as HTMLInputElement).value || element.textContent?.trim();
+        if (value) {
+          customerData.mobile = value;
+          break;
+        }
+      }
+    }
+  }
+
+  // Try to extract email from various possible selectors
+  const emailSelectors = [
+    '.customer-email',
+    '.client-email',
+    '.customer-info .email',
+    '[data-field="customer_email"]',
+    '.form-field[data-field="customer_email"] input',
+    'input[name*="email"]',
+    'input[type="email"]',
+    '.customer-details .email'
+  ];
+
+  for (const selector of emailSelectors) {
+    const element = document.querySelector(selector);
+    if (element) {
+      const value = (element as HTMLInputElement).value || element.textContent?.trim();
+      if (value) {
+        customerData.email = value;
+        break;
+      }
+    }
+  }
+
+  // Try to extract address from various possible selectors
+  const addressSelectors = [
+    '.customer-address',
+    '.client-address',
+    '.customer-info .address',
+    '[data-field="customer_address"]',
+    '.form-field[data-field="customer_address"] textarea',
+    '.form-field[data-field="customer_address"] input',
+    'textarea[name*="address"]',
+    'input[name*="address"]',
+    '.customer-details .address'
+  ];
+
+  for (const selector of addressSelectors) {
+    const element = document.querySelector(selector);
+    if (element) {
+      const value = (element as HTMLInputElement).value || element.textContent?.trim();
+      if (value) {
+        customerData.address = value;
+        break;
+      }
+    }
+  }
+
+  // If we couldn't find specific fields, try to extract from any visible text
+  if (!customerData.name || !customerData.mobile) {
+    // Look for patterns in the page text
+    const pageText = document.body.textContent || '';
+    
+    // Try to find phone number patterns
+    if (!customerData.mobile) {
+      const phoneRegex = /(\+?1?[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})/g;
+      const phoneMatches = pageText.match(phoneRegex);
+      if (phoneMatches && phoneMatches.length > 0) {
+        customerData.mobile = phoneMatches[0];
+      }
+    }
+
+    // Try to find email patterns
+    if (!customerData.email) {
+      const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+      const emailMatches = pageText.match(emailRegex);
+      if (emailMatches && emailMatches.length > 0) {
+        customerData.email = emailMatches[0];
+      }
+    }
+  }
+
+  console.log('Extracted customer data:', customerData);
+  
+  // Store the customer data for the extension to access
+  localStorage.setItem('extractedCustomerData', JSON.stringify(customerData));
+  
+  return customerData;
 }
 
-// Example function: Add custom functionality
-function addCustomFunctionality() {
-  // Example: Add a custom info panel
-  const infoPanel = document.createElement('div');
-  infoPanel.innerHTML = `
-    <div style="
+// Removed the intermediate customer modal - now going directly to text modal
+
+// Function to show text customer modal
+function showTextCustomerModal(phoneNumber: string) {
+  // Create text modal HTML
+  const textModalHTML = `
+    <div id="text-customer-modal" style="
       position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      z-index: 10001;
-      max-width: 400px;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+      backdrop-filter: blur(4px);
     ">
-      <h3>Custom Workorder Info</h3>
-      <p>This is a custom panel added by the extension.</p>
-      <button onclick="this.parentElement.remove()" style="
-        background: #dc3545;
+      <div style="
+        background: white;
+        padding: 24px;
+        border-radius: 12px;
+        max-width: 450px;
+        width: 90%;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        border: 1px solid #e5e7eb;
+      ">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="
+              width: 20px;
+              height: 20px;
+              background: #10b981;
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: white;
+              font-size: 12px;
+            ">💬</div>
+            <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #111827;">Text Customer</h3>
+          </div>
+          <button id="close-text-modal" style="
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px;
+            color: #6b7280;
+            border-radius: 4px;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+          " onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+          <p style="margin: 0 0 8px 0; font-size: 14px; font-weight: 500; color: #374151;">Customer Phone Number</p>
+          <input id="phone-input" type="tel" placeholder="5551234567" value="${phoneNumber}" style="
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 16px;
+          " maxlength="10">
+          
+          <p style="margin: 0 0 8px 0; font-size: 14px; font-weight: 500; color: #374151;">Message</p>
+          <textarea id="message-input" placeholder="Enter your message..." rows="4" style="
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            resize: none;
+            font-family: inherit;
+          ">Good news! Your bike is all set and ready to roll. You can pick it up anytime during our shop hours at Urbane Cyclist.</textarea>
+          <p id="char-count" style="margin: 4px 0 0 0; font-size: 12px; color: #6b7280;">0/160 characters</p>
+        </div>
+        
+        <div style="display: flex; gap: 8px; justify-content: flex-end; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+          <button id="cancel-text" style="
+            background: #6b7280;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+          " onmouseover="this.style.backgroundColor='#4b5563'" onmouseout="this.style.backgroundColor='#6b7280'">Cancel</button>
+          <button id="send-text" style="
+            background: #10b981;
         color: white;
         border: none;
         padding: 8px 16px;
-        border-radius: 4px;
+            border-radius: 6px;
         cursor: pointer;
-      ">Close</button>
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+          " onmouseover="this.style.backgroundColor='#059669'" onmouseout="this.style.backgroundColor='#10b981'">Text Customer</button>
+        </div>
+      </div>
     </div>
   `;
-  document.body.appendChild(infoPanel);
-}
 
-// Note: modifyExistingElements() function was removed because it was turning all buttons green
+  // Add modal to page
+  document.body.insertAdjacentHTML('beforeend', textModalHTML);
 
-// Example function: Extract data from the page
-function extractWorkorderData() {
-  // Example: Extract workorder details from the page
-  const workorderData: any = {
-    id: new URLSearchParams(window.location.search).get('id'),
-    url: window.location.href,
-    title: document.title,
-    timestamp: new Date().toISOString()
+  // Add event listeners
+  const textModal = document.getElementById('text-customer-modal');
+  const closeTextModal = () => {
+    if (textModal) {
+      textModal.remove();
+    }
   };
 
-  // Try to extract more data from the page
-  const titleElement = document.querySelector('h1, .title, .workorder-title');
-  if (titleElement) {
-    workorderData.pageTitle = titleElement.textContent?.trim();
+  // Phone number input - no formatting, digits only
+  const phoneInput = document.getElementById('phone-input') as HTMLInputElement;
+  
+  phoneInput?.addEventListener('input', (e) => {
+    // Remove all non-digit characters
+    const digitsOnly = (e.target as HTMLInputElement).value.replace(/\D/g, "");
+    (e.target as HTMLInputElement).value = digitsOnly;
+  });
+
+  // Message character count
+  const messageInput = document.getElementById('message-input') as HTMLTextAreaElement;
+  const charCount = document.getElementById('char-count');
+  
+  messageInput?.addEventListener('input', (e) => {
+    const length = (e.target as HTMLTextAreaElement).value.length;
+    if (charCount) {
+      charCount.textContent = `${length}/160 characters`;
+    }
+  });
+
+  // Initialize character count
+  if (messageInput && charCount) {
+    charCount.textContent = `${messageInput.value.length}/160 characters`;
   }
 
-  console.log('Extracted workorder data:', workorderData);
+  // Close button events
+  document.getElementById('close-text-modal')?.addEventListener('click', closeTextModal);
+  document.getElementById('cancel-text')?.addEventListener('click', closeTextModal);
+
+  // Send text button
+  document.getElementById('send-text')?.addEventListener('click', async () => {
+    const phone = phoneInput?.value || '';
+    const message = messageInput?.value || '';
+    
+    if (!phone.trim() || !message.trim()) {
+      alert('Please fill in both phone number and message.');
+      return;
+    }
+    
+    // Show loading state
+    const sendButton = document.getElementById('send-text') as HTMLButtonElement;
+    sendButton.textContent = 'Sending...';
+    sendButton.disabled = true;
+    
+    try {
+      // Send POST request to the API
+      const response = await fetch('http://localhost:4000/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        mode: 'cors',
+        credentials: 'omit',
+        body: JSON.stringify({
+          message: message,
+          phoneNumber: phone
+        })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, response: ${errorText}`);
+      }
+      
+      const result = await response.json();
+      console.log('API response:', result);
+      
+      // Show success dialog
+      showSuccessDialog(phone);
+      closeTextModal();
+      
+    } catch (error) {
+      console.error('Error sending message:', error);
+      
+      // Show error message to user
+      alert(`Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // Reset button state
+      sendButton.textContent = 'Text Customer';
+      sendButton.disabled = false;
+    }
+  });
+
+  // Close on outside click
+  textModal?.addEventListener('click', (e) => {
+    if (e.target === textModal) {
+      closeTextModal();
+    }
+  });
+
+  // Close on escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeTextModal();
+    }
+  });
+}
+
+// Function to show success dialog
+function showSuccessDialog(phoneNumber: string) {
+  // Format phone number for display (digits only for API, formatted for user display)
+  const formatForDisplay = (phone: string) => {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length === 10) {
+      return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+    }
+    return phone; // Return as-is if not 10 digits
+  };
   
-  // You could send this data somewhere or store it
-  // localStorage.setItem('lastWorkorderData', JSON.stringify(workorderData));
+  const displayPhone = formatForDisplay(phoneNumber);
+  // Create success dialog HTML with shadcn-style styling
+  const successDialogHTML = `
+    <div id="success-dialog" style="
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10001;
+      backdrop-filter: blur(4px);
+    ">
+      <div style="
+        background: white;
+        padding: 24px;
+        border-radius: 8px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        border: 1px solid #e5e7eb;
+        position: relative;
+      ">
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px 0;">
+          <div style="
+            width: 64px;
+            height: 64px;
+            background: #10b981;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+            color: white;
+            font-size: 32px;
+          ">✓</div>
+          <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 600; color: #111827;">Message Sent Successfully!</h3>
+          <p style="margin: 0 0 24px 0; font-size: 14px; color: #6b7280;">Your customer has been notified at ${displayPhone}</p>
+          <button id="close-success-dialog" style="
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+            width: 100%;
+          " onmouseover="this.style.backgroundColor='#0056b3'" onmouseout="this.style.backgroundColor='#007bff'">Close</button>
+        </div>
+        <button id="close-success-dialog-x" style="
+          position: absolute;
+          right: 16px;
+          top: 16px;
+          background: none;
+          border: none;
+          font-size: 20px;
+          cursor: pointer;
+          padding: 4px;
+          color: #6b7280;
+          border-radius: 4px;
+          width: 28px;
+          height: 28px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background-color 0.2s;
+        " onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+      </div>
+    </div>
+  `;
+
+  // Add dialog to page
+  document.body.insertAdjacentHTML('beforeend', successDialogHTML);
+
+  // Add event listeners
+  const successDialog = document.getElementById('success-dialog');
+  const closeSuccessDialog = () => {
+    if (successDialog) {
+      successDialog.remove();
+    }
+  };
+
+  // Close button events
+  document.getElementById('close-success-dialog')?.addEventListener('click', closeSuccessDialog);
+  document.getElementById('close-success-dialog-x')?.addEventListener('click', closeSuccessDialog);
+
+  // Close on outside click
+  successDialog?.addEventListener('click', (e) => {
+    if (e.target === successDialog) {
+      closeSuccessDialog();
+    }
+  });
+
+  // Close on escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeSuccessDialog();
+    }
+  });
 }
 
 // Function to remove specific elements (customize as needed)
